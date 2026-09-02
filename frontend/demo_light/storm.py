@@ -16,11 +16,13 @@ def main():
     if "first_run" not in st.session_state:
         st.session_state["first_run"] = True
 
-    # set api keys from secrets
-    if st.session_state["first_run"]:
+    # Retain compatibility with existing local secrets.toml installations.
+    secrets_file = os.path.join(script_dir, ".streamlit", "secrets.toml")
+    if st.session_state["first_run"] and os.path.isfile(secrets_file):
         for key, value in st.secrets.items():
             if type(value) == str:
                 os.environ[key] = value
+    st.session_state["first_run"] = False
 
     # initialize session_state
     if "selected_article_index" not in st.session_state:

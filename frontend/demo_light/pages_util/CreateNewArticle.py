@@ -9,13 +9,94 @@ from demo_util import (
     DemoUIHelper,
     truncate_filename,
 )
+from runtime_config import (
+    AppSettings,
+    ConfigurationError,
+    LM_PROVIDERS,
+    RETRIEVERS,
+    RetrieverSelection,
+    discover_models,
+)
+
+PROVIDER_LABELS = {
+    "openai_compatible": "OpenAI-compatible (including OpenRouter)",
+    "anthropic_compatible": "Anthropic Messages-compatible",
+}
+RETRIEVER_LABELS = {
+    "duckduckgo": "DuckDuckGo (no key required)",
+    "you": "You.com",
+    "bing": "Bing",
+    "brave": "Brave",
+    "serper": "Serper",
+    "tavily": "Tavily",
+    "searxng": "SearXNG",
+    "azure_ai_search": "Azure AI Search",
+    "vector": "Existing Qdrant collection",
+}
 
 
-def handle_not_started():
+def _discover_models_cached(selection, settings):
+    cache = st.session_state.setdefault("page3_model_cache", {})
+    now = time.monotonic()
+    cache_key = (selection.provider, selection.models_url)
+    cached = cache.get(cache_key)
+    if cached and now - cached["created"] <= settings.model_cache_ttl_seconds:
+        return cached["models"], cached.get("error")
+    try:
+        models = discover_models(selection, settings.http_timeout_seconds)
+        result = {"created": now, "models": models, "error": None}
+    except ConfigurationError as error:
+        result = {"created": now, "models": [], "error": str(error)}
+    cache[cache_key] = result
+    return result["models"], result["error"]
+
+
+def handle_not_started(settings):
     if st.session_state["page3_write_article_state"] == "not started":
         _, search_form_column, _ = st.columns([2, 5, 2])
         with search_form_column:
             with st.form(key="search_form"):
+                provider = st.selectbox(
+                    "Language model API",
+                    LM_PROVIDERS,
+                    index=LM_PROVIDERS.index(settings.default_lm_provider),
+                    format_func=PROVIDER_LABELS.get,
+                )
+                base_selection = settings.lm_selection(provider)
+                discovered_models, discovery_error = _discover_models_cached(
+                    base_selection, settings
+                )
+                if discovered_models:
+                    model_options = discovered_models + ["Enter a model ID manually"]
+                    default_model = base_selection.model
+                    model_index = (
+                        model_options.index(default_model)
+                        if default_model in model_options
+                        else len(model_options) - 1 if default_model else 0
+                    )
+                    selected_model = st.selectbox(
+                        "Model", model_options, index=model_index
+                    )
+                    manual_model = ""
+                    if selected_model == "Enter a model ID manually":
+                        manual_model = st.text_input(
+                            "Model ID", value=base_selection.model
+                        )
+                    model = manual_model or (
+                        ""
+                        if selected_model == "Enter a model ID manually"
+                        else selected_model
+                    )
+                else:
+                    st.caption(discovery_error or "Enter a model ID manually.")
+                    model = st.text_input("Model ID", value=base_selection.model)
+
+                retriever = st.selectbox(
+                    "Search provider",
+                    RETRIEVERS,
+                    index=RETRIEVERS.index(settings.default_retriever),
+                    format_func=RETRIEVER_LABELS.get,
+                )
                 # Text input for the search topic
                 DemoUIHelper.st_markdown_adjust_size(
                     content="Enter the topic you want to learn in depth:", font_size=18
@@ -54,17 +135,31 @@ def handle_not_started():
                         time.sleep(5)
                         alert.empty()
                     else:
+                        st.session_state["page3_lm_selection"] = settings.lm_selection(
+                            provider, model
+                        )
+                        st.session_state["page3_retriever_selection"] = (
+                            RetrieverSelection(retriever)
+                        )
                         st.session_state["page3_write_article_state"] = "initiated"
 
 
-def handle_initiated():
+def handle_initiated(settings):
     if st.session_state["page3_write_article_state"] == "initiated":
         current_working_dir = os.path.join(demo_util.get_demo_dir(), "DEMO_WORKING_DIR")
         if not os.path.exists(current_working_dir):
             os.makedirs(current_working_dir)
 
-        if "runner" not in st.session_state:
-            demo_util.set_storm_runner()
+        try:
+            demo_util.set_storm_runner(
+                st.session_state["page3_lm_selection"],
+                st.session_state["page3_retriever_selection"],
+                settings,
+            )
+        except (ConfigurationError, ImportError, RuntimeError, ValueError) as error:
+            st.session_state["page3_write_article_state"] = "not started"
+            st.error(f"Configuration error: {error}")
+            return
         st.session_state["page3_current_working_dir"] = current_working_dir
         st.session_state["page3_write_article_state"] = "pre_writing"
 
@@ -112,7 +207,7 @@ def handle_final_writing():
                 do_generate_outline=False,
                 do_generate_article=True,
                 do_polish_article=True,
-                remove_duplicate=False,
+                remove_duplicate=st.session_state["runner_settings"].remove_duplicate,
             )
             # finish the session
             st.session_state["runner"].post_run()
@@ -151,12 +246,18 @@ def handle_completed():
 def create_new_article_page():
     demo_util.clear_other_page_session_state(page_index=3)
 
+    try:
+        settings = AppSettings.from_env()
+    except ConfigurationError as error:
+        st.error(f"Environment configuration error: {error}")
+        return
+
     if "page3_write_article_state" not in st.session_state:
         st.session_state["page3_write_article_state"] = "not started"
 
-    handle_not_started()
+    handle_not_started(settings)
 
-    handle_initiated()
+    handle_initiated(settings)
 
     handle_pre_writing()
 

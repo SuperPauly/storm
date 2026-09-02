@@ -1,0 +1,13 @@
+.git
+.github
+.env
+*.env
+**/.streamlit/secrets.toml
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+frontend/demo_light/DEMO_WORKING_DIR
+results
+logs

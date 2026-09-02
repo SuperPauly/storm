@@ -69,6 +69,43 @@ Co-STORM also maintains a dynamic updated **mind map**, which organize collected
 
 Both STORM and Co-STORM are implemented in a highly modular way using [dspy](https://github.com/stanfordnlp/dspy).
 
+## Dockerized web UI
+
+The included Compose service builds and serves the Streamlit Demo Light UI on
+`http://127.0.0.1:8501` by default. It joins the existing external Docker
+network named `pangolin` using the fixed address in `STORM_PANGOLIN_IP`.
+
+1. Confirm that the external `pangolin` network exists and that the
+   `STORM_PANGOLIN_IP` address in `.env` is free. Edit the ignored `.env` file.
+   For OpenRouter, set
+   `OPENAI_COMPAT_API_KEY` and optionally `OPENAI_COMPAT_DEFAULT_MODEL`.
+   The defaults use OpenRouter's OpenAI-compatible API and model catalog.
+2. Start the service:
+
+   ```shell
+   docker compose up --build -d
+   ```
+
+3. Check it and follow its logs:
+
+   ```shell
+   docker compose ps
+   docker compose logs -f storm
+   ```
+
+Stop the service with `docker compose down`. Generated articles persist in the
+`storm-articles` volume. The `storm-vector-data` volume is mounted at
+`/data/vector_store` for an existing local Qdrant collection. Compose also maps
+`host.docker.internal` to the Docker host for compatible APIs or Qdrant running
+on the host.
+
+The UI supports OpenAI-compatible and Anthropic Messages-compatible endpoints.
+It tries the configured model catalog and always provides a manual model-ID
+fallback. Search choices are DuckDuckGo, You.com, Bing, Brave, Serper, Tavily,
+SearXNG, Azure AI Search, and an existing Qdrant collection. See
+`.env.example` for every supported variable; it contains no credentials and can
+be copied to recreate `.env`.
+
 ## Installation
 
 

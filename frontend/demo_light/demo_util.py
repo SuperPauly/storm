@@ -18,10 +18,16 @@ from knowledge_storm import (
     STORMWikiRunner,
     STORMWikiLMConfigs,
 )
-from knowledge_storm.lm import OpenAIModel
-from knowledge_storm.rm import YouRM
 from knowledge_storm.storm_wiki.modules.callback import BaseCallbackHandler
 from knowledge_storm.utils import truncate_filename
+from runtime_config import (
+    AppSettings,
+    LMSelection,
+    RetrieverSelection,
+    build_lm_configs,
+    build_retriever,
+    configuration_fingerprint,
+)
 from stoc import stoc
 
 
@@ -574,38 +580,37 @@ def clear_other_page_session_state(page_index: Optional[int]):
         del st.session_state[key]
 
 
-def set_storm_runner():
+def set_storm_runner(
+    lm_selection: LMSelection,
+    retriever_selection: RetrieverSelection,
+    settings: AppSettings,
+):
     current_working_dir = os.path.join(get_demo_dir(), "DEMO_WORKING_DIR")
     if not os.path.exists(current_working_dir):
         os.makedirs(current_working_dir)
 
-    # configure STORM runner
-    llm_configs = STORMWikiLMConfigs()
-    llm_configs.init_openai_model(
-        openai_api_key=st.secrets["OPENAI_API_KEY"], openai_type="openai"
-    )
-    llm_configs.set_question_asker_lm(
-        OpenAIModel(
-            model="gpt-4-1106-preview",
-            api_key=st.secrets["OPENAI_API_KEY"],
-            api_provider="openai",
-            max_tokens=500,
-            temperature=1.0,
-            top_p=0.9,
-        )
-    )
+    fingerprint = configuration_fingerprint(lm_selection, retriever_selection, settings)
+    if (
+        "runner" in st.session_state
+        and st.session_state.get("runner_fingerprint") == fingerprint
+    ):
+        return st.session_state["runner"]
+
+    llm_configs = build_lm_configs(lm_selection)
     engine_args = STORMWikiRunnerArguments(
         output_dir=current_working_dir,
-        max_conv_turn=3,
-        max_perspective=3,
-        search_top_k=3,
-        retrieve_top_k=5,
+        max_conv_turn=settings.max_conv_turn,
+        max_perspective=settings.max_perspective,
+        search_top_k=settings.search_top_k,
+        retrieve_top_k=settings.retrieve_top_k,
+        max_thread_num=settings.max_thread_num,
     )
-
-    rm = YouRM(ydc_api_key=st.secrets["YDC_API_KEY"], k=engine_args.search_top_k)
-
+    rm = build_retriever(retriever_selection, settings)
     runner = STORMWikiRunner(engine_args, llm_configs, rm)
     st.session_state["runner"] = runner
+    st.session_state["runner_fingerprint"] = fingerprint
+    st.session_state["runner_settings"] = settings
+    return runner
 
 
 def display_article_page(
