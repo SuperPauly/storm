@@ -1,34 +1,35 @@
 # STORM Minimal User Interface
 
-This is a minimal user interface for `STORMWikiRunner` which includes the following features:
-1. Allowing user to create a new article through the "Create New Article" page.
-2. Showing the intermediate steps of STORMWikiRunner in real-time when creating an article.
-3. Displaying the written article and references side by side.
-4. Allowing user to view previously created articles through the "My Articles" page.
-
-<p align="center">
-  <img src="assets/create_article.jpg" style="width: 70%; height: auto;">
-</p>
-
-<p align="center">
-  <img src="assets/article_display.jpg" style="width: 70%; height: auto;">
-</p>
+This minimal Streamlit interface can create articles, show STORM's intermediate
+research steps, display citations beside an article, and reopen saved articles.
 
 ## Setup
-1. Make sure you have installed `knowledge-storm` or set up the source code correctly.
-2. Install additional packages required by the user interface:
-    ```bash
-    pip install -r requirements.txt
-    ```
-2. Make sure you set up the API keys following the instructions in the main README file. Create a copy of `secrets.toml` and place it under `.streamlit/`.
-3. Run the following command to start the user interface:
-    ```bash
-    streamlit run storm.py
-    ```
-   The user interface will create a `DEMO_WORKING_DIR` directory in the current directory to store the outputs.
+From the repository root, confirm that the external Docker network `pangolin`
+exists and that `STORM_PANGOLIN_IP` in `.env` is available. Then start the
+Dockerized UI:
+
+```bash
+docker compose up --build -d
+```
+
+Open `http://127.0.0.1:8501`. Articles and a local Qdrant store use named
+volumes, so `docker compose down` does not remove them.
+
+For a non-Docker development setup:
+
+1. Install this repository with `pip install -e .`.
+2. Install the UI dependencies with `pip install -r requirements.txt` from this
+   directory.
+3. Export the variables documented in the repository's `.env.example` or keep
+   using a local `.streamlit/secrets.toml` file.
+4. Run `streamlit run storm.py`.
+
+The UI creates `DEMO_WORKING_DIR` beside `storm.py` to store its outputs.
 
 ## Customization
 
 You can customize the `STORMWikiRunner` powering the user interface according to [the guidelines](https://github.com/stanford-oval/storm?tab=readme-ov-file#customize-storm) in the main README file.
 
-The `STORMWikiRunner` is initialized in `set_storm_runner()` in [demo_util.py](demo_util.py). You can change `STORMWikiRunnerArguments`, `STORMWikiLMConfigs`, or use a different retrieval model according to your need.
+The `STORMWikiRunner` is initialized in `set_storm_runner()` in
+[demo_util.py](demo_util.py). Environment parsing, compatible API integration,
+and retriever construction live in [runtime_config.py](runtime_config.py).
