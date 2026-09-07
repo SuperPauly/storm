@@ -1236,3 +1236,109 @@ class AzureAISearch(dspy.Retrieve):
                 logging.error(f"Error occurs when searching query {query}: {e}")
 
         return collected_results
+
+
+class ExaRM(dspy.Retrieve):
+    def __init__(
+        self,
+        exa_api_key=None,
+        k=3,
+        is_valid_source: Callable = None,
+        num_results=10,
+        text_length_limit=1000,
+    ):
+        """Initialize the Exa search retriever.
+
+        Args:
+            exa_api_key (str, optional): The API key for Exa. Defaults to None (reads from EXA_API_KEY env var).
+            k (int, optional): The number of top passages to retrieve. Defaults to 3.
+            is_valid_source (Callable, optional): A function that takes a URL and returns a boolean indicating if the
+                source is valid. Defaults to None.
+            num_results (int, optional): Number of search results to request from Exa. Defaults to 10.
+            text_length_limit (int, optional): Max characters of text content per result. Defaults to 1000.
+        """
+        super().__init__(k=k)
+        if not exa_api_key and not os.environ.get("EXA_API_KEY"):
+            raise RuntimeError(
+                "You must supply exa_api_key or set environment variable EXA_API_KEY"
+            )
+        self.exa_api_key = exa_api_key or os.environ["EXA_API_KEY"]
+        self.num_results = num_results
+        self.text_length_limit = text_length_limit
+        self.usage = 0
+
+        if is_valid_source:
+            self.is_valid_source = is_valid_source
+        else:
+            self.is_valid_source = lambda x: True
+
+    def get_usage_and_reset(self):
+        usage = self.usage
+        self.usage = 0
+        return {"ExaRM": usage}
+
+    def forward(
+        self, query_or_queries: Union[str, List[str]], exclude_urls: List[str] = []
+    ):
+        """Search with Exa for self.k top passages for query or queries
+
+        Args:
+            query_or_queries (Union[str, List[str]]): The query or queries to search for.
+            exclude_urls (List[str]): A list of urls to exclude from the search results.
+
+        Returns:
+            a list of Dicts, each dict has keys of 'description', 'snippets' (list of strings), 'title', 'url'
+        """
+        queries = (
+            [query_or_queries]
+            if isinstance(query_or_queries, str)
+            else query_or_queries
+        )
+        self.usage += len(queries)
+        collected_results = []
+
+        for query in queries:
+            try:
+                headers = {
+                    "Content-Type": "application/json",
+                    "x-api-key": self.exa_api_key,
+                }
+                payload = {
+                    "query": query,
+                    "numResults": self.num_results,
+                    "contents": {"text": {"maxCharacters": self.text_length_limit}},
+                }
+
+                response = requests.post(
+                    "https://api.exa.ai/search",
+                    headers=headers,
+                    json=payload,
+                ).json()
+
+                results = response.get("results", [])
+
+                for result in results:
+                    url = result.get("url", "")
+                    if url in exclude_urls or not self.is_valid_source(url):
+                        continue
+
+                    text_content = result.get("text", "")
+                    snippets = (
+                        [text_content[i : i + 500] for i in range(0, len(text_content), 500)]
+                        if text_content
+                        else []
+                    )
+
+                    collected_results.append(
+                        {
+                            "url": url,
+                            "title": result.get("title", ""),
+                            "description": result.get("snippet", "")
+                            or (text_content[:200] if text_content else ""),
+                            "snippets": snippets[:5],
+                        }
+                    )
+            except Exception as e:
+                logging.error(f"Error occurs when searching query {query}: {e}")
+
+        return collected_results
