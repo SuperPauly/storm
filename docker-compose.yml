@@ -27,7 +27,8 @@ services:
   qdrant:
     image: qdrant/qdrant:v1.8.4
     networks:
-      - pangolin
+      pangolin:
+        ipv4_address: "${QDRANT_PANGOLIN_IP:-172.25.0.51}"
     volumes:
       - qdrant-data:/qdrant/storage
     environment:
@@ -38,7 +39,8 @@ services:
   redis:
     image: redis:7-alpine
     networks:
-      - pangolin
+      pangolin:
+        ipv4_address: "${REDIS_PANGOLIN_IP:-172.25.0.52}"
     volumes:
       - redis-data:/data
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
