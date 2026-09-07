@@ -4,13 +4,18 @@ services:
       context: .
     env_file:
       - .env
+    environment:
+      - EXA_API_KEY=${EXA_API_KEY}
+      - OMNIROUTER_API_BASE=http://172.25.0.99:20128
+      - OMNIROUTER_API_KEY=${OMNIROUTER_API_KEY:-}
     ports:
       - "${STORM_HOST_BIND:-127.0.0.1}:${STORM_HOST_PORT:-8501}:8501"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+      - "omnir.superpauly.com:172.25.0.99"
     networks:
       pangolin:
-        ipv4_address: "${STORM_PANGOLIN_IP:?STORM_PANGOLIN_IP must be set}"
+        ipv4_address: "${STORM_PANGOLIN_IP:-172.25.0.50}"
     volumes:
       - storm-articles:/app/frontend/demo_light/DEMO_WORKING_DIR
       - storm-vector-data:/data/vector_store
