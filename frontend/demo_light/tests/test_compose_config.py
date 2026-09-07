@@ -6,7 +6,9 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 
 class ComposeConfigTests(unittest.TestCase):
     def test_storm_uses_environment_controlled_pangolin_address(self):
-        compose = (REPOSITORY_ROOT / "compose.yaml").read_text(encoding="utf-8")
+        compose = (REPOSITORY_ROOT / "docker-compose.yml").read_text(
+            encoding="utf-8"
+        )
 
         self.assertIn("pangolin:", compose)
         self.assertIn('ipv4_address: "${STORM_PANGOLIN_IP', compose)
