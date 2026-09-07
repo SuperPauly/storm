@@ -8,6 +8,7 @@ services:
       - EXA_API_KEY=${EXA_API_KEY}
       - OMNIROUTER_API_BASE=http://172.25.0.99:20128
       - OMNIROUTER_API_KEY=${OMNIROUTER_API_KEY:-}
+      - QDRANT_URL=http://qdrant:6333
     ports:
       - "${STORM_HOST_BIND:-127.0.0.1}:${STORM_HOST_PORT:-8501}:8501"
     extra_hosts:
@@ -18,7 +19,29 @@ services:
         ipv4_address: "${STORM_PANGOLIN_IP:-172.25.0.50}"
     volumes:
       - storm-articles:/app/frontend/demo_light/DEMO_WORKING_DIR
-      - storm-vector-data:/data/vector_store
+      - storm-cache:/root/.storm_local_cache
+    depends_on:
+      - qdrant
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:v1.8.4
+    networks:
+      - pangolin
+    volumes:
+      - qdrant-data:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__HTTP_PORT=6333
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    networks:
+      - pangolin
+    volumes:
+      - redis-data:/data
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
     restart: unless-stopped
 
 networks:
@@ -28,4 +51,6 @@ networks:
 
 volumes:
   storm-articles:
-  storm-vector-data:
+  storm-cache:
+  qdrant-data:
+  redis-data:
